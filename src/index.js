@@ -4,14 +4,16 @@ import "./index.css";
 import App from "./App";
 import reportWebVitals from "./reportWebVitals";
 import { GlobalContext } from "./contexts/GlobalContext";
+import { QueryClient, QueryClientProvider } from "react-query";
+const queryClient = new QueryClient();
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
-  <React.StrictMode>
-    <GlobalContext>
+  <GlobalContext>
+    <QueryClientProvider client={queryClient}>
       <App />
-    </GlobalContext>
-  </React.StrictMode>
+    </QueryClientProvider>
+  </GlobalContext>
 );
 
 // If you want to start measuring performance in your app, pass a function

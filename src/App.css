@@ -1,0 +1,112 @@
+/* #xhd input:not(:placeholder-shown) ~ label {
+  top: -10px;
+  left: 0;
+  color: red;
+} */
+#xhd input::placeholder {
+  /* display: none !important; */
+  opacity: 0;
+}
+#xhd input:focus {
+  border: none;
+  outline: none;
+}
+
+input#email:not(:placeholder-shown) ~ label {
+  top: -10px;
+  left: 0;
+  color: red;
+  font-size: 0.7em;
+  font-weight: 600;
+}
+input#name:not(:placeholder-shown) ~ label {
+  top: -10px;
+  left: 0;
+  color: red;
+  font-size: 0.7em;
+  font-weight: 600;
+}
+input#company:not(:placeholder-shown) ~ label {
+  top: -10px;
+  left: 0;
+  color: red;
+  font-size: 0.7em;
+  font-weight: 600;
+}
+input#tax:not(:placeholder-shown) ~ label {
+  top: -10px;
+  left: 0;
+  color: red;
+  font-size: 0.7em;
+  font-weight: 600;
+}
+input#address:not(:placeholder-shown) ~ label {
+  top: -10px;
+  left: 0;
+  color: red;
+  font-size: 0.7em;
+  font-weight: 600;
+}
+
+#thanks {
+  background-image: linear-gradient(
+    to right,
+    rgb(232, 221, 17) 0%,
+    rgb(233, 139, 16) 99%
+  );
+  -webkit-background-clip: text;
+  color: transparent;
+  font-family: cursive;
+  font-size: 60pt;
+}
+#thanks strong {
+  background-image: linear-gradient(
+    to right,
+    rgb(232, 67, 17) 0%,
+    rgb(249, 6, 6) 99%
+  );
+  -webkit-background-clip: text;
+  color: transparent;
+  font-family: cursive;
+  font-size: 80pt;
+}
+@media screen and (max-width: 768px) {
+  #thanks strong {
+    font-size: 40pt;
+  }
+  #thanks {
+    font-size: 30pt;
+  }
+}
+.custom-class {
+  position: fixed;
+  z-index: 9999 !important;
+}
+.ant-btn-primary {
+  color: white;
+  background-color: rgb(43, 43, 236) !important;
+}
+#slide_address::-webkit-scrollbar {
+  height: 10px;
+  border-radius: 10px;
+  background-color: #aaa;
+  /* border-radius: 1rem; */
+}
+#slide_address::-webkit-scrollbar-thumb {
+  border-radius: 1rem;
+  background-color: rgb(58, 142, 238);
+}
+@media screen and (max-width: 768px) {
+  #slide_address::-webkit-scrollbar {
+    display: none;
+  }
+  #webkit-scroll::-webkit-scrollbar {
+    display: none !important;
+  }
+}
+a#back:hover {
+  color: white !important;
+}
+.ant-modal {
+  max-width: 100vw !important;
+}

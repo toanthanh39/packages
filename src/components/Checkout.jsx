@@ -3,6 +3,16 @@ import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import useCheckouts from "../hooks/useCheckouts";
+import { useQuery } from "react-query";
+import ToolipCustom from "./child/ToolipCustom";
+import { DoubleLeftOutlined, LoadingOutlined } from "@ant-design/icons";
+import CollapseCustom from "./child/CollapseCustom";
+import { FcShipped } from "react-icons/fc";
+import { UseGlobalContext } from "../contexts/GlobalContext";
+import Progess from "./child/Progess";
+import { message } from "antd";
+import axios from "axios";
+
 const schema = yup.object({
   firstname: yup.string().required("Tên không được bỏ trống"),
   lastname: yup.string().required("Họ không được bỏ trống"),
@@ -16,45 +26,223 @@ const schema = yup.object({
   address: yup.string("Vui lòng nhập địa chỉ").required("Vui lòng địa chỉ"),
   district: yup.string().required("Vui lòng chọn địa chỉ quận/huyện"),
   ward: yup.string().required("Vui lòng chọn địa chỉ phường/xã"),
-  city: yup.string().required("Vui lòng chọn địa chỉ tỉnh/thành phố"),
-  another: yup.string().required("choose another "),
-  sale: yup.number(),
-  pay: yup.string().required("Please choose status"),
-  address_kh: yup.string().required("Vui lòng chọn loại địa chỉ"),
-  company_kh: yup.string().required("Vui lòng chọn loại địa chỉ công ty"),
-  email_kh: yup.string().required("Vui lòng nhập email công ty"),
-  tax_kh: yup.number().required("Vui lòng nhập mã thuế"),
-  name_kh: yup.string().required("Vui lòng nhập tên "),
+  province: yup.string().required("Vui lòng chọn địa chỉ tỉnh/thành phố"),
+  // another: yup.string().required("choose another "),
+  // sale: yup.number(),
+  pay: yup.number().required("Please choose status"),
+  // address_kh: yup.string().required("Vui lòng chọn loại địa chỉ"),
+  // company_kh: yup.string().required("Vui lòng chọn loại địa chỉ công ty"),
+  // email_kh: yup.string().required("Vui lòng nhập email công ty"),
+  // tax_kh: yup.number().required("Vui lòng nhập mã thuế"),
+  // name_kh: yup.string().required("Vui lòng nhập tên "),
 });
-const Checkout = ({ handleChageScreen }) => {
-  const { fetchDataCheckouts } = useCheckouts();
+const Checkout = ({ screen, handleChageScreen }) => {
+  const {
+    fetchDataCheckouts,
+    fetchLocationP,
+    postLocation,
+    postPayment,
+    postUpdateCart,
+    completeCheckout,
+  } = useCheckouts();
+  const { inforCheckout, setInforCheckout, token, city } = UseGlobalContext();
+  const openMessage = ({ type = "success", content = "" }) => {
+    messageApi.open({
+      type: type,
+      content: content,
+      duration: 3,
+      style: {
+        position: "relative",
+        top: "10vh",
+        zIndex: 999999,
+      },
+    });
+  };
+
+  // State
   const [data, setData] = React.useState(null);
-  const [province, setProvince] = React.useState(["Hà Nội", "Hồ Chí Minh"]);
+  const [province, setProvince] = React.useState([]);
   const [district, setDistrict] = React.useState([]);
   const [ward, setWard] = React.useState([]);
-
+  const [loading, setLoading] = React.useState(false);
+  const [isFetching, setIsFetching] = React.useState(true);
+  const [cp, setCp] = React.useState("");
+  const [loadingCP, setLoadingCP] = React.useState(false);
   const check = React.useRef(null);
+  const [messageApi, contextHolder] = message.useMessage();
+
+  // useForm
   const {
     handleSubmit,
     formState: { errors },
     register,
     watch,
+    setValue,
+    reset,
   } = useForm({
     resolver: yupResolver(schema),
+    defaultValues: {
+      // province: inforCheckout.province ? inforCheckout.province : "",
+      // district: inforCheckout.district ? inforCheckout.district : "",
+      // ward: inforCheckout.ward ? inforCheckout.ward : "",
+      // firstname: "",
+      // lastname: "",
+      // address: "",
+      // phone:""
+      email_kh: "",
+      address_kh: "",
+      company_kh: "",
+      tax_kh: "",
+      name_kh: "",
+    },
+    mode: "all",
   });
-  const onSubmit = (data) => {
-    console.log("🚀 ~ file: CheckoutGuest.tsx:11 ~ onSubmit ~ data", data);
-  };
 
   check.current = {
-    city: watch("city"),
+    province: watch("province"),
     district: watch("district"),
     ward: watch("ward"),
+    firstname: watch("firstname"),
+    lasttname: watch("lastname"),
+    phone: watch("phone"),
+    address: watch("address"),
   };
-  console.log(
-    "🚀 ~ file: Checkout.jsx:46 ~ Checkout ~  check.current",
-    check.current
+
+  const onSubmit = async (data) => {
+    setLoading(true);
+    const noteJSON = {
+      email_kh: data.email_kh,
+      address_kh: data.address_kh,
+      company_kh: data.company_kh,
+      tax_kh: data.tax_kh,
+      name_kh: data.name_kh,
+    };
+    const resPayment = postPayment({
+      payID: data.pay,
+    });
+    const resLocation = postLocation({
+      first_name: data.firstname,
+      last_name: data.lastname,
+      phone: data.phone,
+      address: data.address,
+      province_code: data.province,
+      district_code: data.district,
+      ward_code: data.ward,
+    });
+    // if (
+    //   data.email_kh !== "" &&
+    //   data.name_kh !== "" &&
+    //   data.tax_kh !== "" &&
+    //   data.address_kh !== ""
+    // ) {
+    var resNote = postUpdateCart({
+      note: JSON.stringify(noteJSON),
+    });
+    // }
+    const body = new URLSearchParams();
+    body.append("form_type", "checkout");
+    body.append("utf8", "true");
+    body.append("__RequestVerificationToken", token);
+    const res_complete = completeCheckout({ body });
+
+    // const res_complete = await axios.post(
+    //   "https://namperfume.net/checkouts/complete",
+    //   body,
+    //   {
+    //     headers: {
+    //       "Content-Type": "application/x-www-form-urlencoded",
+    //     },
+    //   }
+    // );
+    Promise.all([resPayment, resLocation, resNote, res_complete])
+      .then((data) => {
+        console.log("🚀 ~ file: Checkout.jsx:158 ~ .then ~ data", data);
+        if (
+          data[0].error === false &&
+          data[1].error === false &&
+          data[3].status === 200
+        ) {
+          setTimeout(() => {
+            setLoading(false);
+            handleChageScreen("thankyou");
+          }, 2500);
+        } else {
+          setLoading(false);
+          window.alert("some thing went wrong ! Please check your information");
+          return;
+        }
+      })
+      .catch((err) => {
+        setLoading(false);
+        window.alert("some thing went wrong ! Please check your information");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  };
+
+  // useQuery
+  const {
+    data: location,
+    error,
+    isError,
+    isLoading,
+  } = useQuery(
+    [
+      "location",
+      check.current.province,
+      check.current.district,
+      check.current.ward,
+    ],
+    fetchLocationP,
+    {
+      enabled: isFetching,
+    }
   );
+
+  // Function
+  const handleOnchangeValue = (e) => {
+    setInforCheckout({
+      ...inforCheckout,
+      [e.target.name]: e.target.value,
+    });
+  };
+  const handleReset = (opt) => {
+    reset({
+      ...opt,
+    });
+  };
+  const onApplyCoupon = async () => {
+    if (cp === "") {
+      openMessage({
+        type: "success",
+        content: "Bạn chưa có mã ? mua sắm để nhận ưu đãi !",
+        duration: 30,
+      });
+      return;
+    }
+    try {
+      setLoadingCP(true);
+      const response = await axios.post(process.env.REACT_APP_API_DISCOUNT, {
+        discount_code: cp,
+      });
+      if (response) {
+        setData(response.data.checkouts);
+        setLoadingCP(false);
+        openMessage({
+          type: "success",
+          content: "Áp dụng mã thành công  !",
+        });
+      }
+    } catch (error) {
+      setLoadingCP(false);
+      openMessage({
+        type: "warning",
+        content: "Mã khuyến mãi không hợp lệ !",
+      });
+    }
+  };
+  // useEffect
   React.useEffect(() => {
     const res_data = fetchDataCheckouts();
     if (res_data) {
@@ -62,54 +250,111 @@ const Checkout = ({ handleChageScreen }) => {
         if (res.checkouts !== null) {
           setData(res.checkouts);
         } else {
-          // handleChageScreen("default");
+          handleChageScreen("default");
           return;
         }
       });
     }
+  }, [screen]);
+
+  React.useLayoutEffect(() => {
+    handleReset({
+      province: inforCheckout.province,
+      district: inforCheckout.district,
+      ward: inforCheckout.ward,
+    });
   }, []);
 
   React.useEffect(() => {
-    if (check.current.city !== "") {
-      setDistrict(["quận 1", "quận 2"]);
+    if (check.current.province !== "") {
+      location && setDistrict(location.checkouts.available_districts);
       if (check.current.district !== "") {
-        setWard(["phường 1", "phường 2"]);
+        location && setWard(location.checkouts.available_wards);
+      } else {
+        setWard([]);
       }
     } else {
-      setDistrict([]);
       setWard([]);
+      setDistrict([]);
+      setValue("ward", "");
+      setValue("district", "");
     }
-  }, [check.current.city, check.current.district]);
+  }, [check.current.province, check.current.district, isLoading, location]);
+
+  React.useEffect(() => {
+    if (location) {
+      setProvince(location.checkouts.available_provinces);
+    }
+  }, [loading]);
+
+  React.useEffect(() => {
+    setIsFetching(true);
+  }, [check.current.province, check.current.district]);
+
+  React.useEffect(() => {
+    const openMessage = ({ type = "success", content = "" }) => {
+      messageApi.open({
+        type: type,
+        content: content,
+        duration: 5,
+        style: {
+          position: "relative",
+          top: "10vh",
+          zIndex: 999999,
+        },
+      });
+    };
+    if (isError) {
+      setIsFetching(false);
+      openMessage({
+        type: "error",
+        content: "something went wrong! Please choose city again",
+      });
+      setValue("ward", "");
+      setValue("district", "");
+      setWard([]);
+      setDistrict([]);
+    }
+  }, [isError]);
+
   return (
-    <div className="w-full h-auto p-[16px] overflow-x-hidden">
+    <div className="w-full h-auto p-[16px] overflow-x-hidden ">
+      {contextHolder}
+      {isLoading && <Progess className="bg-transparent"></Progess>}
+      <ToolipCustom title="Go back" className="absolute  left-[16px]">
+        <DoubleLeftOutlined
+          className="text-[20pt]   hover:scale-125 transition-all"
+          onClick={() => {
+            handleChageScreen("login");
+          }}
+        />
+      </ToolipCustom>
       <div className="w-full h-auto mt-[8px]">
-        <h3 className="text-center mb-[24px]">Thanh toán</h3>
+        <h3 className="text-center mb-[24px] font-[700]">Thanh toán</h3>
         <div className="w-full ">
+          <h1 className=" text-[20px]">Thông tin giao hàng</h1>
+
           <form
             onSubmit={handleSubmit(onSubmit)}
             className="w-full  flex flex-col gap-[16px]"
           >
-            <h1 className=" text-[20px]">Thông tin giao hàng</h1>
             <div className="">
-              {/* <div className="inline-block bg-[#004B8F] text-white rounded-[4px] text-center mb-[8px] pl-[10px] py-[2px] px-[10px] ">
-              <p className="text-[10px]">Văn phòng</p>
-            </div>
-            <div className="flex  items-center justify-start gap-1 mb-[8px]"> 
-              <p>Nam Nguyen</p>
-              <p>-</p>
-              <p>0123456789</p>
-            </div>
-            <p>420/6 Lê Văn Sỹ P.14, Q3, TP. Hồ Chí Minh</p> */}
               <div className="mt-[16px] relative">
                 <label className="text-[12px] text-[#898889] block" htmlFor="">
                   Tên
                 </label>
                 <input
                   type="text"
-                  placeholder="firstname"
                   className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
                   name="firstname"
-                  {...register("firstname")}
+                  id="firstname"
+                  placeholder="first name"
+                  defaultValue={inforCheckout.firstname}
+                  {...register("firstname", {
+                    onChange: (e) => {
+                      handleOnchangeValue(e);
+                    },
+                  })}
                 />
                 {errors?.firstname && (
                   <p className="text-red-500 absolute right-0 top-[50%]">*</p>
@@ -121,10 +366,16 @@ const Checkout = ({ handleChageScreen }) => {
                 </label>
                 <input
                   type="text"
-                  placeholder="nam"
+                  placeholder="last name"
                   className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
                   name="lastname"
-                  {...register("lastname")}
+                  id="lastname"
+                  defaultValue={inforCheckout.lastname}
+                  {...register("lastname", {
+                    onChange: (e) => {
+                      handleOnchangeValue(e);
+                    },
+                  })}
                 />
                 {errors?.lastname && (
                   <p className="text-red-500 absolute right-0 top-[50%]">*</p>
@@ -135,11 +386,18 @@ const Checkout = ({ handleChageScreen }) => {
                   Số điện thoại
                 </label>
                 <input
-                  type="text"
-                  placeholder="0987654321"
+                  type="tel"
                   className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
                   name="phone"
-                  {...register("phone")}
+                  id="phone"
+                  pattern="[0-9]{3}[0-9]{3}[0-9]{4}"
+                  placeholder="phone"
+                  defaultValue={inforCheckout.phone}
+                  {...register("phone", {
+                    onChange: (e) => {
+                      handleOnchangeValue(e);
+                    },
+                  })}
                 />
                 {errors?.phone && (
                   <p className="text-red-500 absolute right-0 top-[50%]">*</p>
@@ -150,11 +408,17 @@ const Checkout = ({ handleChageScreen }) => {
                   Địa chỉ
                 </label>
                 <input
-                  type="100 Le Van Sy"
+                  type="text"
                   placeholder="nam"
                   className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
                   name="address"
-                  {...register("address")}
+                  id="address"
+                  defaultValue={inforCheckout.address}
+                  {...register("address", {
+                    onChange: (e) => {
+                      handleOnchangeValue(e);
+                    },
+                  })}
                 />
                 {errors?.address && (
                   <p className="text-red-500 absolute right-0 top-[50%]">*</p>
@@ -170,18 +434,37 @@ const Checkout = ({ handleChageScreen }) => {
                   </label>
                   <select
                     className="border border-x-0 border-t-0 pt-[4px] pb-[4px] focus:outline-none w-full"
-                    name="city"
-                    {...register("city")}
+                    name="province"
+                    // defaultValue={
+                    //   inforCheckout.province !== ""
+                    //     ? inforCheckout.province
+                    //     : ""
+                    // }
+                    {...register("province", {
+                      onChange: (e) => {
+                        handleOnchangeValue(e);
+                        handleReset({ district: "", ward: "" });
+                      },
+                    })}
                   >
                     <option value="">Chọn Tỉnh/Thành phố</option>
-                    {province.length > 0 &&
+                    {province !== null &&
+                      province.length > 0 &&
                       province.map((item, index) => (
-                        <option key={index} value={item}>
-                          {item}
+                        <option
+                          key={index}
+                          value={item.province_code}
+                          selected={
+                            item.province_code === inforCheckout.province
+                              ? true
+                              : false
+                          }
+                        >
+                          {item.province_name}
                         </option>
                       ))}
                   </select>
-                  {errors?.city && (
+                  {errors?.province && (
                     <p className="text-red-500 absolute right-0 top-0">*</p>
                   )}
                 </div>
@@ -197,17 +480,50 @@ const Checkout = ({ handleChageScreen }) => {
                   <select
                     className="border border-x-0 border-t-0 pt-[4px] pb-[4px] focus:outline-none w-full"
                     name="district"
-                    {...register("district")}
+                    // defaultValue={
+                    //   inforCheckout.district !== ""
+                    //     ? inforCheckout.district
+                    //     : ""
+                    // }
+                    {...register("district", {
+                      onChange: (e) => {
+                        handleOnchangeValue(e);
+                      },
+                    })}
                   >
+                    {/* {isLoading ? (
+                      <option value="">Please wait</option>
+                    ) : (
+                      <>
+                        <option value="">Chọn quận huyện</option>
+                        {district !== null &&
+                          district.length > 0 &&
+                          district.map((item, index) => (
+                            <option key={item.id} value={item.district_code}>
+                              {item.district_name}
+                            </option>
+                          ))}
+                      </>
+                    )} */}
                     <option value="">Chọn quận huyện</option>
-                    {district.length > 0 &&
+
+                    {district !== null &&
+                      district.length > 0 &&
                       district.map((item, index) => (
-                        <option key={index} value={item}>
-                          {item}
+                        <option
+                          key={item.id}
+                          value={item.district_code}
+                          selected={
+                            item.district_code === inforCheckout.district
+                              ? true
+                              : false
+                          }
+                        >
+                          {item.district_name}
                         </option>
                       ))}
                   </select>
-                  {errors?.distict && (
+                  {errors?.district && (
                     <p className="text-red-500 absolute right-0 top-0">*</p>
                   )}
                 </div>
@@ -221,13 +537,28 @@ const Checkout = ({ handleChageScreen }) => {
                   <select
                     className="border border-x-0 border-t-0 pt-[4px] pb-[4px] focus:outline-none w-full"
                     name="ward"
-                    {...register("ward")}
+                    // defaultValue={
+                    //   inforCheckout.ward !== "" ? inforCheckout.ward : ""
+                    // }
+                    {...register("ward", {
+                      onChange: (e) => {
+                        handleOnchangeValue(e);
+                      },
+                    })}
                   >
                     <option value="">Chọn phường xã</option>
-                    {ward.length > 0 &&
-                      ward.map((item, index) => (
-                        <option key={index} value={item}>
-                          {item}
+
+                    {ward !== null &&
+                      ward?.length > 0 &&
+                      ward.map((item) => (
+                        <option
+                          key={item.id}
+                          value={item.ward_code}
+                          selected={
+                            item.ward_code === inforCheckout.ward ? true : false
+                          }
+                        >
+                          {item.ward_name}
                         </option>
                       ))}
                   </select>
@@ -300,9 +631,10 @@ const Checkout = ({ handleChageScreen }) => {
               </label>
               <input
                 id="note"
-                className="h-[50px] w-full pl-[16px] border-1 border-[#D8D7D8] "
+                className="h-[50px] w-full pl-[16px] border border-1 border-[#D8D7D8] "
                 type="text"
                 placeholder="Nhập ghi chú (nếu có)"
+                {...register("note")}
               />
             </div>
             <div className="mt-[24px]">
@@ -310,8 +642,8 @@ const Checkout = ({ handleChageScreen }) => {
                 Phương thức vận chuyển
               </h3>
               <div className="h-[72px] w-full border-solid border-[1px] border-[#D8D7D8] bg-[#F7F7F7] flex items-center gap-[8px] px-[22px] py-[18px] ">
-                <div className="">
-                  <img src="/asset/images/Box_light.png " alt="" />
+                <div>
+                  <FcShipped className="text-[16pt]"></FcShipped>
                 </div>
                 <div className="">
                   <p className="font-[700] text-[14px]">
@@ -333,8 +665,14 @@ const Checkout = ({ handleChageScreen }) => {
                   name="pay"
                   id="pays"
                   className="cursor-pointer "
-                  value="code"
-                  {...register("pay")}
+                  value={1}
+                  checked={inforCheckout.pay === 1 ? true : null}
+                  // checked={data && data.payment_method_id === 1 ? true : null}
+                  {...register("pay", {
+                    onChange: (e) => {
+                      handleOnchangeValue(e);
+                    },
+                  })}
                 />
                 <div className="">
                   <p className="text-[12px] leading-[15px] text-[#3A393A]">
@@ -349,7 +687,9 @@ const Checkout = ({ handleChageScreen }) => {
                   name="pay"
                   id="pays"
                   className="cursor-pointer "
-                  value="transfer"
+                  value={2}
+                  checked={inforCheckout.pay === 2 ? true : null}
+                  // checked={data && data.payment_method_id === 2 ? true : null}
                   {...register("pay")}
                 />
 
@@ -368,7 +708,10 @@ const Checkout = ({ handleChageScreen }) => {
                   name="pay"
                   id="pays"
                   className="cursor-pointer "
-                  value="bank"
+                  value={3}
+                  disabled
+                  checked={inforCheckout.pay === 3 ? true : null}
+                  // checked={data && data.payment_method_id === 3 ? true : null}
                   {...register("pay")}
                 />
 
@@ -389,104 +732,121 @@ const Checkout = ({ handleChageScreen }) => {
               <h3 className="mb-[16px] font-[500] text-[20px] text-[#3A393A] leading-[24px]">
                 Thông tin xuất hoá đơn
               </h3>
-              <div className=" border-solid border-[1px] border-[#D8D7D8] bg-[#F7F7F7] p-[16px]">
-                <div className="flex gap-[10px] items-start ">
+              <div className=" border-solid border-[1px] border-[#D8D7D8] bg-[#F7F7F7] ">
+                <CollapseCustom>
+                  <div id="xhd">
+                    <form action="">
+                      <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8]  ">
+                        <input
+                          type="email"
+                          placeholder="1"
+                          className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
+                          id="email"
+                          {...register("email_kh")}
+                        />
+                        <label
+                          htmlFor="email"
+                          className="group-focus:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
+                        >
+                          Email nhận hoá đơn
+                        </label>
+                        {errors?.email_kh && (
+                          <p className="text-red-500 absolute right-0 top-0">
+                            *
+                          </p>
+                        )}
+                      </div>
+                      <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8]  ">
+                        <input
+                          type="text"
+                          placeholder="1"
+                          className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
+                          id="name"
+                          {...register("name_kh")}
+                        />
+                        <label
+                          htmlFor="name"
+                          className="group-hover:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
+                        >
+                          Tên người nhận hoá đơn
+                        </label>
+                        {errors?.name_kh && (
+                          <p className="text-red-500 absolute right-0 top-0">
+                            *
+                          </p>
+                        )}
+                      </div>
+                      <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8] ">
+                        <input
+                          type="text"
+                          placeholder="1"
+                          className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
+                          id="company"
+                          {...register("company_kh")}
+                        />
+                        <label
+                          htmlFor="company"
+                          className="group-hover:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
+                        >
+                          Tên công ty
+                        </label>
+                        {errors?.company_kh && (
+                          <p className="text-red-500 absolute right-0 top-0">
+                            *
+                          </p>
+                        )}
+                      </div>
+                      <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8] ">
+                        <input
+                          type="number"
+                          placeholder="1"
+                          className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
+                          id="tax"
+                          {...register("tax_kh")}
+                        />
+                        <label
+                          htmlFor="tax"
+                          className="group-hover:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
+                        >
+                          Mã số thuế
+                        </label>
+                        {errors?.tax_kh && (
+                          <p className="text-red-500 absolute right-0 top-0">
+                            *
+                          </p>
+                        )}
+                      </div>
+                      <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8] ">
+                        <input
+                          type="text"
+                          placeholder="1"
+                          className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
+                          id="address"
+                          {...register("address_kh")}
+                        />
+                        <label
+                          htmlFor="address"
+                          className="group-hover:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
+                        >
+                          Địa chỉ công ty
+                        </label>
+                        {errors?.address_kh && (
+                          <p className="text-red-500 absolute right-0 top-0">
+                            *
+                          </p>
+                        )}
+                      </div>
+                    </form>
+                  </div>
+                </CollapseCustom>
+                {/* <div className="flex gap-[10px] items-start ">
                   <img src="/asset/images/success.png" alt="" />
                   <p>
                     <strong className="font-[700]">Xuất hoá đơn</strong> (Quý
                     khách cần xuất hoá đơn mua hàng, vui lòng nhập thông tin tại
                     đây)
                   </p>
-                </div>
-                <div className="">
-                  <form action="">
-                    <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8]  ">
-                      <input
-                        type="email"
-                        className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
-                        id="email"
-                        {...register("email_kh")}
-                      />
-                      <label
-                        htmlFor="email"
-                        className="group-focus:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
-                      >
-                        Email nhận hoá đơn
-                      </label>
-                      {errors?.email_kh && (
-                        <p className="text-red-500 absolute right-0 top-0">*</p>
-                      )}
-                    </div>
-                    <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8]  ">
-                      <input
-                        type="text"
-                        className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
-                        id="name"
-                        {...register("name_kh")}
-                      />
-                      <label
-                        htmlFor="name"
-                        className="group-hover:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
-                      >
-                        Tên người nhận hoá đơn
-                      </label>
-                      {errors?.name_kh && (
-                        <p className="text-red-500 absolute right-0 top-0">*</p>
-                      )}
-                    </div>
-                    <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8] ">
-                      <input
-                        type="text"
-                        className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
-                        id="company"
-                        {...register("company_kh")}
-                      />
-                      <label
-                        htmlFor="company"
-                        className="group-hover:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
-                      >
-                        Tên công ty
-                      </label>
-                      {errors?.company_kh && (
-                        <p className="text-red-500 absolute right-0 top-0">*</p>
-                      )}
-                    </div>
-                    <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8] ">
-                      <input
-                        type="number"
-                        className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
-                        id="tax"
-                        {...register("tax_kh")}
-                      />
-                      <label
-                        htmlFor="tax"
-                        className="group-hover:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
-                      >
-                        Mã số thuế
-                      </label>
-                      {errors?.tax_kh && (
-                        <p className="text-red-500 absolute right-0 top-0">*</p>
-                      )}
-                    </div>
-                    <div className="group relative h-[40px] mt-[16px] border border-x-0 border-t-0 border-[#D8D7D8] ">
-                      <input
-                        type="text"
-                        className=" relative h-full w-full p-1  bg-transparent hover:outline-none "
-                        id="address"
-                        {...register("address_kh")}
-                      />
-                      <label
-                        htmlFor="address"
-                        className="group-hover:text-red-600  absolute top-[40%] left-0 z-[5] group-hover:top-[-10px] group-hover:left-0 transition-all"
-                      >
-                        Địa chỉ công ty
-                      </label>
-                      {errors?.address_kh && (
-                        <p className="text-red-500 absolute right-0 top-0">*</p>
-                      )}
-                    </div>
-                  </form>
-                </div>
+                </div> */}
               </div>
             </div>
             <div className="group mt-[24px] border-solid border-[1px] border-[#D8D7D8] py-[8px] px-[16px] ">
@@ -613,11 +973,20 @@ const Checkout = ({ handleChageScreen }) => {
               <div className="flex gap-[8px] mt-[8px] h-[31px]">
                 <input
                   type="text"
-                  className="rounded-[4px] border-solid border-[1px] border-[#898889] h-full flex-1"
-                  {...register("sale")}
+                  className="gradient rounded-[4px] border-solid border-[1px] border-[#898889] h-full flex-1 p-[2px] text-pink-500    "
+                  onChange={(e) => {
+                    setCp(e.target.value);
+                  }}
                 />
-                <button className="w-[65px] h-full bg-[#898889] text-white border-none hover:bg-blue-500">
-                  Áp dụng
+                <button
+                  type="button"
+                  className="w-[65px] h-full bg-[#898889] text-white border-none hover:bg-blue-500"
+                  disabled={loadingCP}
+                  onClick={() => {
+                    onApplyCoupon();
+                  }}
+                >
+                  {loadingCP ? <LoadingOutlined /> : "Áp dụng"}
                 </button>
               </div>
             </div>
@@ -634,7 +1003,29 @@ const Checkout = ({ handleChageScreen }) => {
               </div>
               <div className="mb-[16px]">
                 <p className="inline">Phí vận chuyển</p>
-                <p className="inline float-right">Free</p>
+                <p className="inline float-right">
+                  {/* {data &&
+                  data.shipping_price.toLocaleString("vi-VN", {
+                    style: "currency",
+                    currency: "VND",
+                  }) === 0
+                    ? "Free"
+                    : data.shipping_price.toLocaleString("vi-VN", {
+                        style: "currency",
+                        currency: "VND",
+                      })} */}
+                  0
+                </p>
+              </div>
+              <div className="mb-[16px]">
+                <p className="inline">Giảm giá</p>
+                <p className="inline float-right text-[#004B8F]">
+                  {data &&
+                    data.discount.toLocaleString("vi-VN", {
+                      style: "currency",
+                      currency: "VND",
+                    })}
+                </p>
               </div>
             </div>
             <div className="">
@@ -649,9 +1040,14 @@ const Checkout = ({ handleChageScreen }) => {
               <button
                 style={{ background: "#D72229", color: "#ffffff" }}
                 type="submit"
+                disabled={loading ? true : false}
                 className=" block w-full border-none text-white rounded-[4px] h-[34px] bg-[#D72229] my-[40px]"
               >
-                Thanh toán
+                {loading ? (
+                  <div className="w-10 h-10 rounded-full border-[3px] border-blue-600  border-t-transparent animate-spin  "></div>
+                ) : (
+                  " Thanh toán"
+                )}
               </button>
               <div className="text-[14px] font-[400]">
                 <p className="mb-[16px]">

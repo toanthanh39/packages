@@ -2,8 +2,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
-import ReCAPTCHA from "react-google-recaptcha";
-
+import { AiFillEyeInvisible, AiFillEye } from "react-icons/ai";
 const schema = yup
   .object({
     phone: yup
@@ -23,7 +22,6 @@ const Login = ({ handleChageScreen }) => {
     handleSubmit,
     formState: { errors },
   } = useForm({
-    // resolver dùng để validate với yup
     resolver: yupResolver(schema),
   });
   const onSubmit = (data) => {
@@ -44,12 +42,12 @@ const Login = ({ handleChageScreen }) => {
           <p className="mb-[16px] text-[12px] text-[#898889]">
             (You will have the option to create an account later)
           </p>
-          <a
-            href="/"
+          <button
+            onClick={() => handleChageScreen("checkout")}
             className="bg-[#d72229] h-[34px] rounded-[4px] w-[100%] flex justify-center text-white leading-[34px]"
           >
             Checkout as guest
-          </a>
+          </button>
         </div>
 
         <form className="mt-[40px]" onSubmit={handleSubmit(onSubmit)}>
@@ -78,14 +76,21 @@ const Login = ({ handleChageScreen }) => {
                 placeholder="**********"
                 {...register("password")}
               />
-              <img
-                className="absolute right-0 top-0"
-                onClick={() => {
-                  setShowPassword(!showPassword);
-                }}
-                src="/asset/images/show_password.png"
-                alt=""
-              />
+              {showPassword ? (
+                <AiFillEyeInvisible
+                  className="absolute right-0 top-0"
+                  onClick={() => {
+                    setShowPassword(false);
+                  }}
+                ></AiFillEyeInvisible>
+              ) : (
+                <AiFillEye
+                  className="absolute right-0 top-0"
+                  onClick={() => {
+                    setShowPassword(true);
+                  }}
+                ></AiFillEye>
+              )}
             </div>
 
             <p className="text-red-600 text=[12px]">{errors.phone?.message}</p>
