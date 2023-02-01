@@ -2,12 +2,11 @@ import React from "react";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
-import { useQuery } from "react-query";
 import useCheckouts from "./../hooks/useCheckouts";
 import { message } from "antd";
 import { UseGlobalContext } from "../contexts/GlobalContext";
 import Progess from "./child/Progess";
-
+import "./component.css";
 const schema = yup.object({
   firstName: yup.string().required("Tên không được bỏ trống"),
   lastName: yup.string("Vui lòng nhập họ").required("Họ không được bỏ trống"),
@@ -23,41 +22,22 @@ const schema = yup.object({
   district: yup.string().required("Vui lòng chọn địa chỉ quận/huyện"),
   province: yup.string().required("Vui lòng chọn địa chỉ tỉnh/thành phố"),
   addressType: yup.number().required("Vui lòng chọn loại địa chỉ"),
+  email: yup.string().required("Vui lòng nhập email công ty"),
 });
 
-const Address = ({ handleChageScreen }) => {
-  const { fetchLocationP, postLocation, postAddress } = useCheckouts();
-  const { city } = UseGlobalContext();
+const Address = ({ setHide, setChange }) => {
+  const { postAddress } = useCheckouts();
+  const { dataWindow } = UseGlobalContext();
 
   // State
-
+  const [province, setProvince] = React.useState([]);
   const [district, setDistrict] = React.useState([]);
   const [ward, setWard] = React.useState([]);
-  const [enable, setEnable] = React.useState(false);
   const check = React.useRef(null);
+  const [loadingAD, setLoaingAD] = React.useState(false);
+
   const [messageApi, contextHolder] = message.useMessage();
   const key = "updatable";
-
-  const openMessage = () => {
-    messageApi.open({
-      key,
-      type: "loading",
-      content: "Loading...",
-      style: {
-        position: "relative",
-        top: "10vh",
-        zIndex: 999999,
-      },
-    });
-    setTimeout(() => {
-      messageApi.open({
-        key,
-        type: "success",
-        content: "Save address success!",
-        duration: 2,
-      });
-    }, 1000);
-  };
 
   // useForm
   const {
@@ -69,6 +49,15 @@ const Address = ({ handleChageScreen }) => {
     reset,
   } = useForm({
     resolver: yupResolver(schema),
+    defaultValues: {
+      province: "",
+      district: "",
+      ward: "",
+      firstName: "",
+      lastName: "",
+      address: "",
+      phone: "",
+    },
   });
   const onSubmit = async (data) => {
     const bodyFormData = new FormData();
@@ -82,7 +71,6 @@ const Address = ({ handleChageScreen }) => {
     bodyFormData.append("address[district]", data.district);
     bodyFormData.append("address[address1]", data.address);
     bodyFormData.append("address[ward]", data.ward);
-
     if (data.addressType === 1) {
       bodyFormData.append("address[default]", 1);
       bodyFormData.append(
@@ -112,14 +100,14 @@ const Address = ({ handleChageScreen }) => {
       );
       bodyFormData.append("address-type", "Khác");
     }
-
     const res = postAddress(bodyFormData);
     if (res) {
       res
         .then((data) => {
           openMessage();
           setTimeout(() => {
-            handleChageScreen("infor");
+            setChange(2);
+            setHide();
           }, 2500);
         })
         .catch((error) => {
@@ -129,131 +117,147 @@ const Address = ({ handleChageScreen }) => {
     }
   };
   check.current = {
-    city: watch("province"),
+    province: watch("province"),
     district: watch("district"),
     ward: watch("ward"),
   };
 
-  // useQuery
-  const {
-    data: location,
-    error,
-    isLoading,
-  } = useQuery(
-    [
-      "location",
-      check.current.city,
-      check.current.district,
-      check.current.ward,
-    ],
-
-    fetchLocationP,
-    {
-      enabled: enable,
+  // Function
+  const openMessage = () => {
+    messageApi.open({
+      key,
+      type: "loading",
+      content: "Loading...",
+      style: {
+        position: "relative",
+        top: "10vh",
+        zIndex: 999999,
+      },
+    });
+    setTimeout(() => {
+      messageApi.open({
+        key,
+        type: "success",
+        content: "Save address success!",
+        duration: 2,
+      });
+    }, 1000);
+  };
+  const handleChangeAddress = async (e, opt = null) => {
+    const option = {
+      province: "PROVINCE",
+      district: "DISTRICT",
+    };
+    const value = e.target.value;
+    setLoaingAD(true);
+    switch (opt) {
+      case option.province:
+        if (value !== "") {
+          const res = await dataWindow.getProvince(241, value);
+          if (res) {
+            setDistrict(res.districts);
+            setWard([]);
+            setLoaingAD(false);
+          } else {
+            openMessage({
+              type: "error",
+              content: "something went wrong! Please choose city again",
+            });
+            setValue("ward", "");
+            setValue("district", "");
+            setWard([]);
+            setDistrict([]);
+          }
+        }
+        break;
+      case option.district:
+        const res = await dataWindow.getProvince(241, check.current.province);
+        setValue("ward", "");
+        if (res && value !== "") {
+          setWard(res[value].wards);
+          setLoaingAD(false);
+        } else {
+          setWard([]);
+          setLoaingAD(false);
+        }
+        break;
+      default:
+        break;
     }
-  );
+  };
 
   // useEffect
   React.useEffect(() => {
-    if (check.current.city !== "") {
-      location && setDistrict(location.checkouts.available_districts);
-      if (check.current.district !== "") {
-        location && setWard(location.checkouts.available_wards);
-      } else {
-        setWard([]);
-      }
-    } else {
+    if (check.current.province === "" || check.current.province === undefined) {
       setWard([]);
       setDistrict([]);
       setValue("ward", "");
       setValue("district", "");
     }
-  }, [check.current.city, check.current.district, isLoading, location]);
+  }, [check.current.province]);
 
   React.useEffect(() => {
-    setValue("ward", "");
-    setValue("district", "");
-    setWard([]);
-  }, [check.current.city]);
-  React.useEffect(() => {}, []);
-  //   React.useEffect(() => {
-  //     var countries = null;
-  // 	const addressData = window.Countries;
+    if (JSON.stringify(dataWindow) !== "{}") {
+      setProvince(dataWindow[241].provinces);
+    }
+  }, [dataWindow]);
 
-  // 	/* Get list countries */
-  // 	countries = addressData.countries;
+  // React.useEffect(() => {
+  //   setValue("ward", "");
+  //   setValue("district", "");
+  //   setWard([]);
+  // }, [check.current.province]);
 
-  // 	let countryId = 241;
-  // 	let provinces = addressData[countryId];
-
-  // 	// Để render tỉnh thành thì for từ provinces.provinces
-
-  // 	// Xong trong event on change của tình thành
-  // 	// get countryId và provinceId
-  // 	async function getDistrict(provinceId){
-  //    const districts = await addressData.getProvince(countryId, provinceId);
-
-  //     if(Object.keys(districts).length !== 0){
-  //     	//district là object có các trường là i <=> id, n <=> name
-  //     }
-  // 	}
-  // 	getDistrict();
-  // 	/* Kết thúc sự kiện chọn tỉnh thành, render quận */
-  // //Object.keys(districts).length === 0
-  // 	// rồi đến sự kiện change quận để render ra phường xã
-  // 	// thì cứ get id của country, province, district
-  // 	// xong cũng sẽ có hàm trong hàm như trên
-  // 	async function getWard(districtId,provinceId){
-  // 	const	districts = await addressData.getProvince(countryId, provinceId);
-
-  // 		if(Object.keys(districts).length !== 0){
-  // 	 		let wards = districts[districtId].wards;
-  // 	 		// ward cũng sẽ lần lượt là object có i <=> id, n <=> name
-  //     }
-  // 	}
-  // 	getWard();
-  //   },[])
   return (
     <>
       {contextHolder}
-      {isLoading && <Progess className="bg-transparent"></Progess>}
-      <form className="w-full p-[16px]" onSubmit={handleSubmit(onSubmit)}>
-        <p className="text-center font-bold">Thanh toán</p>
-        <h3 className="mb-8 font-medium text-[20px] mt-[24px]">
-          Địa chỉ giao hàng
+      {loadingAD && <Progess className="bg-transparent"></Progess>}
+      <form id="add_address" className="w-full h-full">
+        <h3 className="mb-8 font-medium text-[2rem] ">
+          Thêm địa thông tin giao hàng
         </h3>
-        <div className="mt-[16px]">
-          <label className="text-[12px] text-[#898889] block" htmlFor="">
-            Tên
-          </label>
-          <input
-            type="text"
-            placeholder="nam"
-            className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
-            {...register("firstName")}
-          />
-          <p className="text-red-600 text=[12px]">
-            {errors.firstName?.message}
-          </p>
+        <div className="w-full flex flex-col md:flex-row gap-[1rem]">
+          <div className="flex-1">
+            <label className="text-[12px] text-[#898889] block" htmlFor="">
+              Tên
+            </label>
+            <input
+              type="text"
+              placeholder="nam"
+              className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
+              {...register("firstName")}
+            />
+            <p className="text-red-600 text=[12px]">
+              {errors.firstName?.message}
+            </p>
+          </div>
+          <div className="flex-1">
+            <label className="text-[12px] text-[#898889] block" htmlFor="">
+              Họ
+            </label>
+            <input
+              type="text"
+              placeholder="nam"
+              className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
+              {...register("lastName")}
+            />
+            <p className="text-red-600 text=[12px]">
+              {errors.lastName?.message}
+            </p>
+          </div>
         </div>
-        <div className="mt-[16px]">
-          <label className="text-[12px] text-[#898889] block" htmlFor="">
-            Họ
-          </label>
-          <input
-            type="text"
-            placeholder="nam"
-            className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
-            {...register("lastName")}
-          />
-          <p className="text-red-600 text=[12px]">{errors.lastName?.message}</p>
-        </div>
-        <div className="mt-[16px]">
+        <div
+          style={{ borderBottom: "1px solid #D8D7D8" }}
+          className="mt-[16px]"
+        >
           <label className="text-[12px] text-[#898889] block" htmlFor="">
             Email
           </label>
           <input
-            style={{ padding: 0, borderBottom: "1px solid #898889" }}
+            style={{
+              border: "none",
+              padding: "4px 0",
+            }}
             type="email"
             placeholder="email"
             className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
@@ -285,47 +289,50 @@ const Address = ({ handleChageScreen }) => {
           />
           <p className="text-red-600 text=[12px]">{errors.address?.message}</p>
         </div>
-        <div className="mt-[16px] flex justify-between gap-[8px]">
-          <div className="w-full">
-            <label className="text-[12px] text-[#898889] block" htmlFor="">
-              Tỉnh/Thành phố
-            </label>
-            <select
-              className="border border-x-0 border-t-0 pt-[4px] pb-[4px] focus:outline-none w-full"
-              {...register("province", {
-                onBlur: () => {
-                  setEnable(true);
-                },
-              })}
-            >
-              <option value="">Chọn tỉnh/thành phố</option>
-              {city?.length > 0 &&
-                city?.map((item, index) => (
-                  <option key={index} value={item.province_name}>
-                    {item.province_name}
-                  </option>
-                ))}
-            </select>
-            <p className="text-red-600 text=[12px]">
-              {errors.province?.message}
-            </p>
+        <div className="mt-[16px] w-full h-auto flex flex-col md:flex-row gap-[16px]">
+          <div className=" flex-1">
+            <div className="w-full">
+              <label className="text-[12px] text-[#898889] block" htmlFor="">
+                Tỉnh/Thành phố
+              </label>
+              <select
+                className="border border-x-0 border-t-0 pt-[4px] pb-[4px] focus:outline-none w-full"
+                {...register("province", {
+                  onChange: (e) => {
+                    handleChangeAddress(e, "PROVINCE");
+                  },
+                })}
+              >
+                <option value="">Chọn tỉnh/thành phố</option>
+                {province?.length > 0 &&
+                  province?.map((item) => (
+                    <option key={item.i} value={item.n}>
+                      {item.n}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-red-600 text=[12px]">
+                {errors.province?.message}
+              </p>
+            </div>
           </div>
-        </div>
-        <div className="mt-[16px] flex justify-between gap-[8px]">
-          <div className="w-[50%]">
+          <div className="flex-1">
             <label className="text-[12px] text-[#898889] block" htmlFor="">
               Quận/Huyện
             </label>
             <select
               className="border border-x-0 border-t-0 pt-[4px] pb-[4px] focus:outline-none w-full"
-              {...register("district")}
+              {...register("district", {
+                onChange: (e) => {
+                  handleChangeAddress(e, "DISTRICT");
+                },
+              })}
             >
               <option value="">Chọn quận/huyện</option>
-              {district !== null &&
-                district.length > 0 &&
-                district.map((item, index) => (
-                  <option key={item.id} value={item.district_name}>
-                    {item.district_name}
+              {district.length > 0 &&
+                district.map((item) => (
+                  <option key={item.i} value={item.n}>
+                    {item.n}
                   </option>
                 ))}
             </select>
@@ -333,7 +340,7 @@ const Address = ({ handleChageScreen }) => {
               {errors.district?.message}
             </p>
           </div>
-          <div className="w-[50%]">
+          <div className="flex-1">
             <label className="text-[12px] text-[#898889] block" htmlFor="">
               Phường/Xã
             </label>
@@ -342,11 +349,10 @@ const Address = ({ handleChageScreen }) => {
               {...register("ward")}
             >
               <option value="">Chọn phường/xã</option>
-              {ward !== null &&
-                ward?.length > 0 &&
+              {ward?.length > 0 &&
                 ward.map((item) => (
-                  <option key={item.id} value={item.ward_name}>
-                    {item.ward_name}
+                  <option key={item.i} value={item.n}>
+                    {item.n}
                   </option>
                 ))}
             </select>
@@ -354,47 +360,59 @@ const Address = ({ handleChageScreen }) => {
           </div>
         </div>
         <div className="overflow-hidden relative w-full mt-[28px]">
-          <div className="flex overflow-x-scroll">
-            <div className="flex-shrink-0 w-[35%] relative">
+          <div className="flex gap-[2rem] ">
+            <div className="relative flex items-center  justify-center gap-[0.5rem]  ">
               <input
                 type="radio"
+                style={{ margin: 0 }}
                 className=" text-red bg-red checked:bg-red mr-[11px]"
                 name="addressType"
                 value={1}
                 {...register("addressType")}
                 defaultChecked
               />
-              <label htmlFor="">Địa chỉ mặc định</label>
+              <label style={{ margin: 0 }} htmlFor="">
+                Địa chỉ mặc định
+              </label>
             </div>
-            <div className="flex-shrink-0 w-[20%] relative">
+            <div className=" relative flex items-center   justify-center gap-[0.5rem] ">
               <input
                 type="radio"
+                style={{ margin: 0 }}
                 className=" text-red bg-red checked:bg-red  mr-[11px]"
                 name="addressType"
                 value={2}
                 {...register("addressType")}
               />
-              <label htmlFor="">Nhà</label>
+              <label style={{ margin: 0 }} htmlFor="">
+                Nhà
+              </label>
             </div>
-            <div className="flex-shrink-0 w-[25%] relative">
+            <div className=" relative flex items-center  justify-center gap-[0.5rem]  ">
               <input
                 type="radio"
+                style={{ margin: 0 }}
                 className="text-red form-radio  mr-[11px]"
                 name="addressType"
                 value={3}
                 {...register("addressType")}
               />
-              <label htmlFor="">Công ty</label>
+              <label style={{ margin: 0 }} htmlFor="">
+                Công ty
+              </label>
             </div>
-            <div className="flex-shrink-0 w-[20%] relative">
+            <div className=" relative flex items-center  justify-center gap-[0.5rem]  ">
               <input
                 type="radio"
+                style={{ margin: 0 }}
                 className="form-radio text-indigo-500  mr-[11px]"
                 name="addressType"
                 value={4}
                 {...register("addressType")}
               />
-              <label htmlFor="">Khác</label>
+              <label style={{ margin: 0 }} htmlFor="">
+                Khác
+              </label>
             </div>
           </div>
           <p className="text-red-600 text=[12px]">
@@ -405,7 +423,8 @@ const Address = ({ handleChageScreen }) => {
           <div className="w-[50%]">
             <button
               style={{ background: "#D72229", color: "#ffffff" }}
-              type="submit"
+              type="button"
+              onClick={handleSubmit(onSubmit)}
               className="bg-[#d72229] mt-[24px] h-[34px] leading-[34px] rounded-[4px] w-[100%] flex justify-center text-white"
             >
               Lưu địa chỉ
@@ -416,7 +435,7 @@ const Address = ({ handleChageScreen }) => {
               type="reset"
               onClick={() => {
                 reset();
-                handleChageScreen("infor");
+                setHide();
               }}
               className="bg-white border-solid border-[1px]  mt-[24px] h-[34px] leading-[34px] rounded-[4px] w-[100%] flex justify-center "
             >

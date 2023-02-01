@@ -6,9 +6,11 @@ function GlobalContext(props) {
   const [screenLocal, setScreenLocal] = useLocalStorage("screen", "default");
   const [screen, setScreen] = React.useState(screenLocal);
   const [token, setToken] = React.useState("");
-  const [city, setCity] = React.useState([]);
+  const [dataWindow, setDataWindow] = React.useState({});
   const [dataUpdate, setDataUpdate] = React.useState({});
   const [loginData, setLoginData] = React.useState({});
+  const [order, setOrder] = React.useState(null);
+  const [coupons, setCoupons] = React.useState({});
   const [inforCheckout, setInforCheckout] = React.useState({
     firstname: "",
     lastname: "",
@@ -27,12 +29,16 @@ function GlobalContext(props) {
     setToken,
     inforCheckout,
     setInforCheckout,
-    city,
-    setCity,
+    dataWindow,
+    setDataWindow,
     dataUpdate,
     setDataUpdate,
     loginData,
     setLoginData,
+    order,
+    setOrder,
+    coupons,
+    setCoupons,
   };
   return <Gcontext.Provider value={value}>{props.children}</Gcontext.Provider>;
 }

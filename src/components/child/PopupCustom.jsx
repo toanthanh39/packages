@@ -17,7 +17,7 @@ const PopupCustom = ({
       onCancel={cancel}
       okButtonProps={{ disabled: true, hidden: true }}
       cancelButtonProps={{ disabled: true, hidden: true }}
-      width={1000}
+      width={950}
       zIndex={1000000}
       style={{ height: "auto" }}
     >

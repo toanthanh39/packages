@@ -4,9 +4,10 @@ import { UseGlobalContext } from "../contexts/GlobalContext";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
-import { useQuery } from "react-query";
 import axios from "axios";
 import Progess from "./child/Progess";
+import { message } from "antd";
+import "./component.css";
 
 const schema = yup.object({
   firstName: yup.string().required("Tên không được bỏ trống"),
@@ -21,20 +22,28 @@ const schema = yup.object({
   address: yup.string().required("Vui lòng địa chỉ"),
   district: yup.string().required("Vui lòng chọn địa chỉ quận/huyện"),
   province: yup.string().required("Vui lòng chọn địa chỉ tỉnh/thành phố"),
-  ward: yup.string().required("Vui lòng chọn địa chỉ phường/xã"),
+  // ward: yup.string().required("Vui lòng chọn địa chỉ phường/xã"),
   addressType: yup.number().required("Vui lòng chọn loại địa chỉ"),
+  email: yup.string().required("Vui lòng nhập email công ty"),
 });
 
-const UpdateAddress = ({ onClose, isChange }) => {
-  const { fetchLocationP, postLocation, postAddress } = useCheckouts();
+const UpdateAddress = ({ onClose, isChange, isCurrent, setFinalAddress }) => {
+  //State
+  const [province, setProvince] = React.useState([]);
   const [district, setDistrict] = React.useState([]);
+
   const [ward, setWard] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
-  const { updateAddress } = UseGlobalContext();
   const check = React.useRef(null);
-  const { city, dataUpdate } = UseGlobalContext();
+  const { dataUpdate, dataWindow } = UseGlobalContext();
+  const [loadingAD, setLoaingAD] = React.useState(false);
   const id = dataUpdate.id;
 
+  //useHook
+  const [messageApi, contextHolder] = message.useMessage();
+  const key = "updatable";
+
+  //useForm
   const {
     register,
     handleSubmit,
@@ -44,11 +53,141 @@ const UpdateAddress = ({ onClose, isChange }) => {
     reset,
   } = useForm({
     resolver: yupResolver(schema),
-    defaultValues: {},
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      address: "",
+    },
     mode: "all",
   });
+  //Function
 
+  check.current = {
+    province: watch("province"),
+    district: watch("district"),
+  };
+
+  //Function
+  const openMessageSuccess = () => {
+    messageApi.open({
+      key,
+      type: "loading",
+      content: "Loading...",
+      style: {
+        position: "relative",
+        top: "10vh",
+        zIndex: 999999,
+      },
+    });
+    setTimeout(() => {
+      messageApi.open({
+        key,
+        type: "success",
+        content: "Save address success!",
+        duration: 2,
+      });
+    }, 1000);
+  };
+  const openMessage = ({ type = "success", content = "" }) => {
+    messageApi.open({
+      type: type,
+      content: content,
+      duration: 3,
+      style: {
+        position: "relative",
+        top: "10vh",
+        zIndex: 999999,
+      },
+    });
+  };
+  const handleChangeAddress = async (e, opt = null) => {
+    const option = {
+      province: "PROVINCE",
+      district: "DISTRICT",
+    };
+    const value = e.target.value;
+    setLoaingAD(true);
+    switch (opt) {
+      case option.province:
+        if (value !== "") {
+          const res = await dataWindow.getProvince(241, value);
+          if (res) {
+            setDistrict(res.districts);
+            setWard([]);
+            setLoaingAD(false);
+          } else {
+            openMessage({
+              type: "error",
+              content: "something went wrong! Please choose city again",
+            });
+            setValue("ward", "");
+            setValue("district", "");
+            setWard([]);
+            setDistrict([]);
+          }
+        }
+        break;
+      case option.district:
+        const res = await dataWindow.getProvince(241, check.current.province);
+        setValue("ward", "");
+        if (res && value !== "") {
+          setWard(res[value].wards);
+          setLoaingAD(false);
+        } else {
+          setWard([]);
+          setLoaingAD(false);
+        }
+        break;
+      default:
+        break;
+    }
+  };
+  const handleFirstChangeAddress = async () => {
+    const res = await dataWindow.getProvince(241, dataUpdate.province_name);
+    if (res) {
+      setDistrict(res.districts);
+      setWard(res[dataUpdate.district_name].wards);
+      setLoaingAD(false);
+    } else {
+      openMessage({
+        type: "error",
+        content: "something went wrong! Please choose city again",
+      });
+      setValue("ward", "");
+      setValue("district", "");
+      setWard([]);
+      setDistrict([]);
+    }
+  };
+
+  //onSubmit
   const onSubmit = async (data) => {
+    if (isCurrent === true) {
+      setFinalAddress({
+        full_name: data.lastName + " " + data.firstName,
+        province_code: data.province,
+        district_code: data.district,
+        phone: data.phone,
+        address:
+          data.address +
+          ", " +
+          data.ward +
+          ", " +
+          data.district +
+          ", " +
+          data.province,
+        ward_code: data.ward,
+        email: data.email,
+        type:
+          data.addressType === 1
+            ? "Địa chỉ mặc định"
+            : data.addressType === 2
+            ? "Nhà"
+            : data.addressType === 3
+            ? "Công ty"
+            : "Khác",
+      });
+    }
     setLoading(true);
     const bodyFormData = new FormData();
     bodyFormData.append("form_type", "customer_address");
@@ -60,6 +199,7 @@ const UpdateAddress = ({ onClose, isChange }) => {
     bodyFormData.append("address[province]", data.province);
     bodyFormData.append("address[district]", data.district);
     bodyFormData.append("address[address1]", data.address);
+    bodyFormData.append("address[ward]", data.ward);
     if (data.addressType === 1) {
       bodyFormData.append("address[default]", 1);
       bodyFormData.append(
@@ -105,100 +245,108 @@ const UpdateAddress = ({ onClose, isChange }) => {
       })
       .then((res) => {
         setLoading(false);
-        isChange(2);
+        openMessageSuccess();
         onClose();
+        isChange(2);
       })
       .catch((err) => {
-        console.log(err);
-        isChange(2);
-        setLoading(false);
+        openMessage({
+          type: "error",
+          content: "something went wrong! Please check your information.",
+        });
+        return;
       })
       .finally(() => {
         setLoading(false);
       });
   };
 
-  check.current = {
-    city: watch("province"),
-    district: watch("district"),
-  };
-
-  const {
-    data: location,
-    error,
-    isLoading,
-  } = useQuery(
-    ["location", check.current.city, check.current.district],
-
-    fetchLocationP
-  );
-
+  //useEffect
   React.useEffect(() => {
-    if (check.current.city !== "") {
-      location && setDistrict(location.checkouts.available_districts);
-      if (check.current.district !== "") {
-        location && setWard(location.checkouts.available_wards);
-      } else {
-        setWard([]);
-      }
-    } else {
-      setDistrict([]);
+    if (check.current.province === "" || check.current.province === undefined) {
       setWard([]);
-      setValue("district", "");
+      setDistrict([]);
       setValue("ward", "");
+      setValue("district", "");
     }
-  }, [check.current.city, check.current.district, isLoading, location]);
-
+  }, [check.current.province]);
   React.useEffect(() => {
-    setValue("district", dataUpdate.district_name);
+    if (dataWindow !== undefined && dataWindow !== null) {
+      setProvince(dataWindow[241].provinces);
+    }
+  }, [dataWindow]);
+  React.useEffect(() => {
+    reset({
+      firstName: dataUpdate.first_name,
+      lastName: dataUpdate.last_name,
+      email: dataUpdate.email,
+      province: dataUpdate.province_name,
+      district: dataUpdate.district_name,
+      ward: dataUpdate.ward_name,
+      address: dataUpdate.address.split(",")[0],
+    });
+
+    handleFirstChangeAddress();
     return () => {
       reset();
     };
   }, []);
   return (
     <>
-      <form className="w-full h-auto p-[0]" onSubmit={handleSubmit(onSubmit)}>
-        <h3 className="mb-8 font-medium text-[2rem] ">Địa chỉ giao hàng</h3>
-        <div className="w-full h-full xl:grid xl:grid-cols-2 xl:gap-2">
-          <div className="mt-[16px]">
-            <label className="text-[12px] text-[#898889] block" htmlFor="">
-              Tên
-            </label>
-            <input
-              type="text"
-              placeholder="nam"
-              className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
-              defaultValue={dataUpdate?.last_name}
-              {...register("lastName")}
-            />
-            <p className="text-red-600 text=[12px]">
-              {errors.lastName?.message}
-            </p>
+      {contextHolder}
+      {loadingAD && <Progess className="bg-transparent"></Progess>}
+      <form className="w-full h-auto p-[0]">
+        <h3 className="mb-8 font-medium text-[2rem] ">
+          Cập nhật thông tin giao hàng
+        </h3>
+        <div className="w-full h-auto  gap-[8px]">
+          <div className="mt-[16px] flex flex-col md:flex-row gap-[16px] w-full">
+            <div className=" flex-1">
+              <label className="text-[12px] text-[#898889] block" htmlFor="">
+                Tên
+              </label>
+              <input
+                type="text"
+                placeholder="nam"
+                className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
+                defaultValue={dataUpdate.last_name}
+                {...register("lastName")}
+              />
+              <p className="text-red-600 text=[12px]">
+                {errors.lastName?.message}
+              </p>
+            </div>
+            <div className=" flex-1">
+              <label className="text-[12px] text-[#898889] block" htmlFor="">
+                Họ
+              </label>
+              <input
+                type="text"
+                placeholder="nam"
+                className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
+                defaultValue={dataUpdate.first_name}
+                {...register("firstName")}
+              />
+              <p className="text-red-600 text=[12px]">
+                {errors.firstName?.message}
+              </p>
+            </div>
           </div>
-          <div className="mt-[16px]">
-            <label className="text-[12px] text-[#898889] block" htmlFor="">
-              Họ
-            </label>
-            <input
-              type="text"
-              placeholder="nam"
-              className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
-              defaultValue={dataUpdate.first_name}
-              {...register("firstName")}
-            />
-            <p className="text-red-600 text=[12px]">
-              {errors.firstName?.message}
-            </p>
-          </div>
-          <div className="mt-[16px]">
+          <div
+            style={{ borderBottom: "1px solid #D8D7D8" }}
+            className="mt-[16px]"
+          >
             <label className="text-[12px] text-[#898889] block" htmlFor="">
               Email
             </label>
             <input
-              style={{ padding: 0, borderBottom: "1px solid #898889" }}
+              style={{
+                border: "none",
+                padding: "4px 0",
+              }}
               type="email"
               placeholder="email"
-              className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
+              className=" w-full pt-[4px] pb-[4px] focus:outline-none"
               defaultValue={dataUpdate.email}
               {...register("email")}
             />
@@ -217,78 +365,73 @@ const UpdateAddress = ({ onClose, isChange }) => {
             />
             <p className="text-red-600 text=[12px]">{errors.phone?.message}</p>
           </div>
-          <div className="mt-[16px]">
+          <div className="mt-[16px] ">
             <label className="text-[12px] text-[#898889] block" htmlFor="">
               Địa chỉ
             </label>
             <input
-              type="100 Le Van Sy"
+              type="text"
               placeholder="nam"
               className="border border-x-0 border-t-0 w-full pt-[4px] pb-[4px] focus:outline-none"
-              defaultValue={dataUpdate.address}
+              defaultValue={dataUpdate.address.split(",")[0]}
               {...register("address")}
             />
             <p className="text-red-600 text=[12px]">
               {errors.address?.message}
             </p>
           </div>
-          <div className="mt-[16px] flex justify-between gap-[8px]">
-            <div className="w-full">
+          <div className="w-full mt-[16px] flex flex-col md:flex-row gap-[8px]">
+            <div className="flex-1">
               <label className="text-[12px] text-[#898889] block" htmlFor="">
                 Tỉnh/Thành phố
               </label>
               <select
                 className="border border-x-0 border-t-0 pt-[4px] pb-[4px] focus:outline-none w-full"
                 {...register("province", {
-                  onChange: () => {
+                  onChange: (e) => {
                     setValue("district", "");
+                    handleChangeAddress(e, "PROVINCE");
                   },
                 })}
               >
                 <option value="">Chọn tỉnh/thành phố</option>
-                {city?.length > 0 &&
-                  city?.map((item, index) => (
+                {province?.length > 0 &&
+                  province?.map((item) => (
                     <option
-                      key={index}
-                      value={item.province_name}
-                      selected={
-                        item.id === parseInt(dataUpdate.province_id)
-                          ? true
-                          : false
-                      }
+                      key={item.i}
+                      value={item.n}
+                      selected={item.i == dataUpdate.province_id ? true : false}
                     >
-                      {item.province_name}
+                      {item.n}
                     </option>
                   ))}
               </select>
               <p className="text-red-600 text=[12px]">
                 {errors.province?.message}
               </p>
+              <div className="mt-[16px] flex justify-between gap-[8px]"></div>
             </div>
-          </div>
-          <div className="mt-[16px] flex justify-between gap-[8px]">
-            <div className="w-[50%]">
+            <div className="flex-1 ">
               <label className="text-[12px] text-[#898889] block" htmlFor="">
                 Quận/Huyện
               </label>
               <select
                 className="border border-x-0 border-t-0 pt-[4px] pb-[4px] focus:outline-none w-full"
-                {...register("district")}
+                {...register("district", {
+                  onChange: (e) => {
+                    handleChangeAddress(e, "DISTRICT");
+                  },
+                })}
               >
                 <option value="">Chọn quận/huyện</option>
-                {district !== null &&
-                  district.length > 0 &&
-                  district.map((item, index) => (
+                {district.length > 0 &&
+                  district.map((item) => (
                     <option
-                      key={item.id}
-                      value={item.district_name}
-                      selected={
-                        item.id === parseInt(dataUpdate.district_id)
-                          ? true
-                          : false
-                      }
+                      key={item.i}
+                      value={item.n}
+                      selected={item.i == dataUpdate.district_id ? true : false}
                     >
-                      {item.district_name}
+                      {item.n}
                     </option>
                   ))}
               </select>
@@ -296,7 +439,7 @@ const UpdateAddress = ({ onClose, isChange }) => {
                 {errors.district?.message}
               </p>
             </div>
-            <div className="w-[50%]">
+            <div className="flex-1">
               <label className="text-[12px] text-[#898889] block" htmlFor="">
                 Phường/Xã
               </label>
@@ -305,11 +448,14 @@ const UpdateAddress = ({ onClose, isChange }) => {
                 {...register("ward")}
               >
                 <option value="">Chọn phường/xã</option>
-                {ward !== null &&
-                  ward?.length > 0 &&
+                {ward?.length > 0 &&
                   ward.map((item) => (
-                    <option key={item.id} value={item.ward_name}>
-                      {item.ward_name}
+                    <option
+                      key={item.i}
+                      value={item.n}
+                      selected={item.i == dataUpdate.ward_id ? true : false}
+                    >
+                      {item.n}
                     </option>
                   ))}
               </select>
@@ -341,7 +487,10 @@ const UpdateAddress = ({ onClose, isChange }) => {
                   name="addressType"
                   value={2}
                   defaultChecked={
-                    dataUpdate.addressType === "Nhà" ? true : null
+                    dataUpdate.addressType === "Nhà" &&
+                    dataUpdate.is_default !== true
+                      ? true
+                      : null
                   }
                   {...register("addressType")}
                 />
@@ -386,28 +535,29 @@ const UpdateAddress = ({ onClose, isChange }) => {
               {errors.addressType?.message}
             </p>
           </div>
-          <div className="mt-[8px] flex justify-between gap-[8px]">
-            <div>
-              <button
-                style={{ background: "#D72229", color: "#ffffff" }}
-                type="submit"
-                disabled={loading}
-                className="bg-[#d72229] mt-[24px] h-[34px] leading-[34px] rounded-[4px] w-[100%] flex justify-center text-white"
-              >
-                {loading ? <Progess></Progess> : "Lưu thông tin"}
-              </button>
-            </div>
-            <div>
-              <button
-                type="reset"
-                onClick={() => {
-                  onClose();
-                }}
-                className="bg-white border-solid border-[1px]  mt-[24px] h-[34px] leading-[34px] px-[34px]  rounded-[4px] w-[100%] flex justify-center "
-              >
-                Hủy
-              </button>
-            </div>
+        </div>
+        <div className="mt-[8px] flex justify-between gap-[8px] w-full">
+          <div className="flex-1">
+            <button
+              style={{ background: "#D72229", color: "#ffffff" }}
+              type="button"
+              onClick={handleSubmit(onSubmit)}
+              disabled={loading}
+              className=" w-full bg-[#d72229] mt-[24px] h-[34px] leading-[34px] rounded-[4px]  flex justify-center text-white"
+            >
+              {loading ? <Progess></Progess> : "Lưu thông tin"}
+            </button>
+          </div>
+          <div className="flex-1">
+            <button
+              type="reset"
+              onClick={() => {
+                onClose();
+              }}
+              className="w-full bg-white border-solid border-[1px]  mt-[24px] h-[34px] leading-[34px] px-[34px]  rounded-[4px] flex justify-center "
+            >
+              Hủy
+            </button>
           </div>
         </div>
       </form>
